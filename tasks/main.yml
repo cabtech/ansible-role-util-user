@@ -1,0 +1,162 @@
+---
+# --------------------------------
+
+- name: '{{user.name}} : add user specific group'
+  group:
+    name: '{{user.name}}'
+    state: present
+  become: true
+  tags:
+  - ct-user
+  - ct-user-group
+
+- name: '{{user.name}} : add user'
+  user:
+    name: '{{user.name}}'
+    comment: '{{user.comment}}'
+    groups: "{{(user.groups + [user.name]) | join(',')}}"
+    append: true
+    shell: /bin/bash
+    password: '{{user.password | default(omit)}}'
+    state: present
+  become: true
+  tags:
+  - ct-user
+
+- name: '{{user.name}} : create home directory structure'
+  file:
+    path: ~{{user.name}}/{{kk.name}}
+    state: directory
+    owner: '{{user.name}}'
+    group: '{{user.name}}'
+    mode: '{{kk.mode}}'
+  loop:
+  - {name: .ssh, mode: '0700'}
+  - {name: .ssh/cfg.d, mode: '0700'}
+  - {name: .ssh/keys, mode: '0700'}
+  - {name: bin, mode: '0755'}
+  - {name: etc, mode: '0755'}
+  - {name: etc/bash.d, mode: '0755'}
+  - {name: etc/handy.d, mode: '0755'}
+  - {name: etc/misc, mode: '0755'}
+  - {name: src, mode: '0755'}
+  - {name: tmp, mode: '0755'}
+  - {name: var, mode: '0755'}
+  - {name: var/log, mode: '0755'}
+  - {name: work, mode: '0755'}
+  loop_control:
+    loop_var: kk
+    label: '{{kk.name}}'
+  become: true
+  tags:
+  - ct-user
+
+- name: 'add authorized key, if any'
+  authorized_key:
+    user: '{{user.name}}'
+    state: present
+    key: '{{user.ssh_key}}'
+  when: user.ssh_key is defined
+  become: true
+  tags:
+  - ct-user
+  - ct-user-ssh
+
+- name: '{{user.name}} : copy over base fragment for ssh config'
+  copy:
+    src: ssh_first.cfg
+    dest: ~{{user.name}}/.ssh/cfg.d/000.cfg
+    owner: '{{user.name}}'
+    group: '{{user.name}}'
+    mode: '0600'
+  become: true
+  tags:
+  - ct-user
+  - ct-user-ssh
+
+- name: '{{user.name}} : add line to .bashrc'
+  lineinfile:
+    dest: ~/.bashrc
+    line: '[[ -d ~/etc/bash.d ]] && for ff in ~/etc/bash.d/*.sh; do source $ff; done # ansible'
+    state: present
+  become: true
+  become_user: '{{user.name}}'
+  tags:
+  - ct-user
+  - ct-user-bash
+
+- name: '{{user.name}} : copy misc files over'
+  copy:
+    src: '{{kk.src}}'
+    dest: '{{kk.dest}}'
+    mode: '{{kk.mode}}'
+  loop:
+  - {src: 00_core.sh, dest: ~/etc/bash.d/, mode: '0644'}
+  - {src: dot_yamllint, dest: ~/.yamllint, mode: '0644'}
+  loop_control:
+    loop_var: kk
+    label: '{{kk.dest}}'
+  become: true
+  become_user: '{{user.name}}'
+  tags:
+  - ct-user
+
+- name: '{{user.name}} : sort out prompt string'
+  template:
+    src: ps1.sh.j2
+    dest: ~/etc/bash.d/ps1.sh
+    owner: '{{user.name}}'
+    group: '{{user.name}}'
+    mode: 0444
+  become: true
+  become_user: '{{user.name}}'
+  tags:
+  - ct-user
+  - ct-user-bash
+
+- name: '{{user.name}} : assemble SSH config fragments'
+  assemble:
+    src: ~/.ssh/cfg.d/
+    regexp: '\w+\.cfg'
+    dest: ~/.ssh/config
+    delimiter: '# --------------------------------'
+    mode: 0600
+  become: true
+  become_user: '{{user.name}}'
+  tags:
+  - ct-user
+  - ct-user-ssh
+
+- name: '{{user.name}} : create VIM directories'
+  file:
+    path: '{{kk}}'
+    state: directory
+    mode: 0755
+  loop: ['~/.vim', '~/.vim/ftplugin']
+  loop_control:
+    loop_var: kk
+  become: true
+  become_user: '{{user.name}}'
+  tags:
+  - ct-user
+  - ct-user-vim
+
+- name: '{{user.name}} : copy VIM files over'
+  copy:
+    src: '{{kk.src}}'
+    dest: '{{kk.dest}}'
+    mode: 0444
+  loop:
+  - {src: dot_vimrc, dest: ~/.vimrc}
+  - {src: yaml.vim, dest: ~/.vim/ftplugin/}
+  loop_control:
+    loop_var: kk
+    label: '{{kk.dest}}'
+  become: true
+  become_user: '{{user.name}}'
+  tags:
+  - ct-user
+  - ct-user-vim
+
+# --------------------------------
+...

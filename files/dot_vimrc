@@ -1,0 +1,6 @@
+colo desert
+set tabstop=4
+set autoindent
+set nohlsearch
+syntax on
+filetype plugin on
