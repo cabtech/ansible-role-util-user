@@ -91,7 +91,6 @@
     dest: '{{kk.dest}}'
     mode: '{{kk.mode}}'
   loop:
-  - {src: 00_core.sh, dest: ~/etc/bash.d/, mode: '0644'}
   - {src: dot_yamllint, dest: ~/.yamllint, mode: '0644'}
   loop_control:
     loop_var: kk
