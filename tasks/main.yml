@@ -6,6 +6,7 @@
     name: '{{user.name}}'
     state: present
   become: true
+  when: user.mortal|default(true)|bool
   tags:
   - ct-user
   - ct-user-group
@@ -19,6 +20,7 @@
     shell: /bin/bash
     password: '{{user.password | default(omit)}}'
     state: present
+  when: user.mortal|default(true)|bool
   become: true
   tags:
   - ct-user
@@ -56,7 +58,9 @@
     user: '{{user.name}}'
     state: present
     key: '{{user.ssh_key}}'
-  when: user.ssh_key is defined
+  when:
+  - user.ssh_key is defined
+  - user.mortal|default(true)|bool
   ignore_errors: '{{ansible_check_mode|bool}}'
   become: true
   tags:
@@ -70,6 +74,7 @@
     owner: '{{user.name}}'
     group: '{{user.name}}'
     mode: '0600'
+  when: user.mortal|default(true)|bool
   become: true
   tags:
   - ct-user
@@ -121,6 +126,7 @@
     dest: ~/.ssh/config
     delimiter: '# --------------------------------'
     mode: 0600
+  when: user.mortal|default(true)|bool
   become: true
   become_user: '{{user.name}}'
   tags:
