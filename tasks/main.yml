@@ -53,7 +53,7 @@
   tags:
   - ct-user
 
-- name: 'add authorized key, if any'
+- name: '{{user.name}} : add authorized key, if any'
   authorized_key:
     user: '{{user.name}}'
     state: present
@@ -163,6 +163,19 @@
   tags:
   - ct-user
   - ct-user-vim
+
+- name: '{{user.name}} : create extra dirs from ct_user_extra_dirs'
+  file:
+    path: '{{kk.path}}'
+    state: directory
+    mode: '{{kk.mode}}'
+  loop: '{{ct_user_extra_dirs}}'
+  loop_control:
+    loop_var: kk
+  become: true
+  become_user: '{{user.name}}'
+  tags:
+  - ct-user
 
 # --------------------------------
 ...
