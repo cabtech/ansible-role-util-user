@@ -53,14 +53,18 @@
   tags:
   - ct-user
 
-- name: '{{user.name}} : add authorized key, if any'
+- name: '{{user.name}} : add SSH keys'
   authorized_key:
     user: '{{user.name}}'
-    state: present
-    key: '{{user.ssh_key}}'
+    state: '{{kk.state}}'
+    key: '{{kk.key}}'
   when:
-  - user.ssh_key is defined
+  - user.ssh_keys is defined
   - user.mortal|default(true)|bool
+  loop: '{{user.ssh_keys}}'
+  loop_control:
+    loop_var: kk
+    label: '{{user.name}}'
   ignore_errors: '{{ansible_check_mode|bool}}'
   become: true
   tags:
