@@ -1,4 +1,5 @@
 ---
+ct_user_homedir: /home
 # list of dict with keys(path, mode)
 ct_user_extra_dirs: []
 ...

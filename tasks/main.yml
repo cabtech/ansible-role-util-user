@@ -1,17 +1,52 @@
 ---
 # --------------------------------
 
-- name: '{{user.name}} : add user specific group'
+- name: '{{user.name}} : get user status (CM=F)'
+  getent:
+    database: passwd
+    fail_key: false
+    key: '{{user.name}}'
+  register: reg_user_pre
+  check_mode: false
+  changed_when: reg_user_pre.msg is defined and 'could not be found' in reg_user_pre.msg
+  tags: ct-user
+
+- name: '{{user.name}} : report on user status'
+  debug:
+    var: reg_user_pre
+    verbosity: 1
+  check_mode: false
+  tags: [ct-user]
+
+- name: '{{user.name}} : add user group before adding user'
   group:
     name: '{{user.name}}'
     state: present
   become: true
-  when: user.mortal|default(true)|bool
-  tags:
-  - ct-user
-  - ct-user-group
+  when:
+  - user.mortal | bool
+  - user.state == 'present'
+  tags: ct-user
 
-- name: '{{user.name}} : add user'
+- name: '{{user.name}} : if removing user, remove SSH keys first'
+  authorized_key:
+    key: '{{kk.key}}'
+    state: absent
+    user: '{{user.name}}'
+  loop: '{{user.ssh_keys}}'
+  loop_control:
+    loop_var: kk
+    label: '{{user.name}}'
+  ignore_errors: '{{ansible_check_mode|bool}}'
+  when:
+  - reg_user_pre is not changed  # user exists
+  - user.mortal | bool
+  - user.state == 'absent'
+  - user.ssh_keys is defined
+  become: true
+  tags: ct-user
+
+- name: '{{user.name}} : user account'
   user:
     name: '{{user.name}}'
     comment: '{{user.comment}}'
@@ -19,15 +54,41 @@
     append: true
     shell: /bin/bash
     password: '{{user.password | default(omit)}}'
-    state: present
-  when: user.mortal|default(true)|bool
+    state: '{{user.state}}'
+  when: user.mortal | bool
   become: true
-  tags:
-  - ct-user
+  tags: ct-user
+
+- name: '{{user.name}} : remove user group after removing user'
+  group:
+    name: '{{user.name}}'
+    state: absent
+  become: true
+  when:
+  - user.mortal | bool
+  - user.state == 'absent'
+  tags: ct-user
+
+- name: '{{user.name}} : get user status (CM=F)'
+  getent:
+    database: passwd
+    fail_key: false
+    key: '{{user.name}}'
+  register: reg_user_post
+  check_mode: false
+  changed_when: reg_user_post.msg is defined and 'could not be found' in reg_user_post.msg
+  tags: [ct-user]
+
+- name: '{{user.name}} : report on user status'
+  debug:
+    var: reg_user_post
+    verbosity: 1
+  check_mode: false
+  tags: [ct-user]
 
 - name: '{{user.name}} : create home directory structure'
   file:
-    path: ~{{user.name}}/{{kk.name}}
+    path: '{{ct_user_homedir}}/{{user.name}}/{{kk.name}}'
     state: directory
     owner: '{{user.name}}'
     group: '{{user.name}}'
@@ -36,6 +97,8 @@
   - {name: .ssh, mode: '0700'}
   - {name: .ssh/cfg.d, mode: '0700'}
   - {name: .ssh/keys, mode: '0700'}
+  - {name: .vim, mode: '0755'}
+  - {name: .vim/ftplugin, mode: '0755'}
   - {name: bin, mode: '0755'}
   - {name: etc, mode: '0755'}
   - {name: etc/bash.d, mode: '0755'}
@@ -49,137 +112,114 @@
   loop_control:
     loop_var: kk
     label: '{{kk.name}}'
-  become: true
-  tags:
-  - ct-user
-
-- name: '{{user.name}} : add SSH keys'
-  authorized_key:
-    user: '{{user.name}}'
-    state: '{{kk.state}}'
-    key: '{{kk.key}}'
   when:
-  - user.ssh_keys is defined
-  - user.mortal|default(true)|bool
+  - reg_user_post is not changed  # user exists
+  - user.mortal | bool
+  become: true
+  tags: [ct-user]
+
+- name: '{{user.name}} : manage SSH keys'
+  authorized_key:
+    key: '{{kk.key}}'
+    state: '{{kk.state}}'
+    user: '{{user.name}}'
   loop: '{{user.ssh_keys}}'
   loop_control:
     loop_var: kk
     label: '{{user.name}}'
   ignore_errors: '{{ansible_check_mode|bool}}'
+  when:
+  - reg_user_post is not changed  # user exists
+  - user.mortal | bool
+  - user.ssh_keys is defined
   become: true
-  tags:
-  - ct-user
-  - ct-user-ssh
+  tags: [ct-user]
 
 - name: '{{user.name}} : copy over base fragment for ssh config'
   copy:
     src: ssh_first.cfg
-    dest: ~{{user.name}}/.ssh/cfg.d/000.cfg
+    dest: '{{ct_user_homedir}}/{{user.name}}/.ssh/cfg.d/000.cfg'
     owner: '{{user.name}}'
     group: '{{user.name}}'
     mode: '0600'
-  when: user.mortal|default(true)|bool
+  when:
+  - reg_user_post is not changed  # user exists
+  - user.mortal | bool
   become: true
-  tags:
-  - ct-user
-  - ct-user-ssh
+  tags: ct-user
 
 - name: '{{user.name}} : add line to .bashrc'
   lineinfile:
-    dest: ~/.bashrc
+    dest: '{{ct_user_homedir}}/{{user.name}}/.bashrc'
+    group: '{{user.name}}'
     line: '[[ -d ~/etc/bash.d ]] && for ff in ~/etc/bash.d/*.sh; do source $ff; done # ansible'
+    owner: '{{user.name}}'
     state: present
+  when:
+  - reg_user_post is not changed  # user exists
   become: true
-  become_user: '{{user.name}}'
-  tags:
-  - ct-user
-  - ct-user-bash
+  tags: ct-user
 
 - name: '{{user.name}} : copy misc files over'
   copy:
-    src: '{{kk.src}}'
     dest: '{{kk.dest}}'
+    group: '{{user.name}}'
     mode: '{{kk.mode}}'
+    owner: '{{user.name}}'
+    src: '{{kk.src}}'
   loop:
-  - {src: dot_yamllint, dest: ~/.yamllint, mode: '0644'}
+  - {src: dot_yamllint, dest: '{{ct_user_homedir}}/{{user.name}}/.yamllint', mode: '0644'}
+  - {src: dot_vimrc, dest: '{{ct_user_homedir}}/{{user.name}}/.vimrc', mode: '0444'}
+  - {src: yaml.vim, dest: '{{ct_user_homedir}}/{{user.name}}/.vim/ftplugin/', mode: '0444'}
   loop_control:
     loop_var: kk
     label: '{{kk.dest}}'
+  when:
+  - reg_user_post is not changed  # user exists
   become: true
-  become_user: '{{user.name}}'
-  tags:
-  - ct-user
+  tags: ct-user
 
 - name: '{{user.name}} : sort out prompt string'
   template:
     src: ps1.sh.j2
-    dest: ~/etc/bash.d/ps1.sh
+    dest: '{{ct_user_homedir}}/{{user.name}}/etc/bash.d/ps1.sh'
     owner: '{{user.name}}'
     group: '{{user.name}}'
-    mode: 0444
+    mode: '0444'
+  when:
+  - reg_user_post is not changed  # user exists
   become: true
-  become_user: '{{user.name}}'
-  tags:
-  - ct-user
-  - ct-user-bash
+  tags: ct-user
 
 - name: '{{user.name}} : assemble SSH config fragments'
   assemble:
-    src: ~/.ssh/cfg.d/
-    regexp: '\w+\.cfg'
-    dest: ~/.ssh/config
     delimiter: '# --------------------------------'
-    mode: 0600
-  when: user.mortal|default(true)|bool
+    dest: '{{ct_user_homedir}}/{{user.name}}/.ssh/config'
+    group: '{{user.name}}'
+    regexp: '\w+\.cfg'
+    mode: '0600'
+    owner: '{{user.name}}'
+    src: '{{ct_user_homedir}}/{{user.name}}/.ssh/cfg.d/'
+  when:
+  - reg_user_post is not changed  # user exists
+  - user.mortal | bool
   become: true
-  become_user: '{{user.name}}'
-  tags:
-  - ct-user
-  - ct-user-ssh
-
-- name: '{{user.name}} : create VIM directories'
-  file:
-    path: '{{kk}}'
-    state: directory
-    mode: 0755
-  loop: ['~/.vim', '~/.vim/ftplugin']
-  loop_control:
-    loop_var: kk
-  become: true
-  become_user: '{{user.name}}'
-  tags:
-  - ct-user
-  - ct-user-vim
-
-- name: '{{user.name}} : copy VIM files over'
-  copy:
-    src: '{{kk.src}}'
-    dest: '{{kk.dest}}'
-    mode: 0444
-  loop:
-  - {src: dot_vimrc, dest: ~/.vimrc}
-  - {src: yaml.vim, dest: ~/.vim/ftplugin/}
-  loop_control:
-    loop_var: kk
-    label: '{{kk.dest}}'
-  become: true
-  become_user: '{{user.name}}'
-  tags:
-  - ct-user
-  - ct-user-vim
+  tags: ct-user
 
 - name: '{{user.name}} : create extra dirs from ct_user_extra_dirs'
   file:
+    group: '{{user.name}}'
+    mode: '{{kk.mode}}'
+    owner: '{{user.name}}'
     path: '{{kk.path}}'
     state: directory
-    mode: '{{kk.mode}}'
   loop: '{{ct_user_extra_dirs}}'
   loop_control:
     loop_var: kk
+  when:
+  - reg_user_post is not changed  # user exists
   become: true
-  become_user: '{{user.name}}'
-  tags:
-  - ct-user
+  tags: ct-user
 
 # --------------------------------
 ...
