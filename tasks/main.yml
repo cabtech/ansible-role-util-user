@@ -6,25 +6,32 @@
     database: passwd
     fail_key: false
     key: '{{user.name}}'
-  register: reg_user_pre
+  register: reg_user
   check_mode: false
-  changed_when: reg_user_pre.msg is defined and 'could not be found' in reg_user_pre.msg
+  changed_when: false
   tags: ct-user
 
-- name: '{{user.name}} : report on user status'
+- name: '{{user.name}} : record user status and mortality (CM=F)'
+  set_fact:
+    user_exists: '{{reg_user.msg is not defined}}'
+    mortal: '{{user.mortal | bool}}'
+  check_mode: false
+  tags: ct-user
+
+- name: '{{user.name}} : report on user status (CM=F)'
   debug:
-    var: reg_user_pre
+    var: reg_user
     verbosity: 1
   check_mode: false
   tags: [ct-user]
 
-- name: '{{user.name}} : add user group before adding user'
+- name: '{{user.name}} : if adding user, add user group first'
   group:
     name: '{{user.name}}'
     state: present
   become: true
   when:
-  - user.mortal | bool
+  - mortal
   - user.state == 'present'
   tags: ct-user
 
@@ -39,8 +46,8 @@
     label: '{{user.name}}'
   ignore_errors: '{{ansible_check_mode|bool}}'
   when:
-  - reg_user_pre is not changed  # user exists
-  - user.mortal | bool
+  - mortal
+  - user_exists
   - user.state == 'absent'
   - user.ssh_keys is defined
   become: true
@@ -55,17 +62,17 @@
     shell: /bin/bash
     password: '{{user.password | default(omit)}}'
     state: '{{user.state}}'
-  when: user.mortal | bool
+  when: mortal
   become: true
   tags: ct-user
 
-- name: '{{user.name}} : remove user group after removing user'
+- name: '{{user.name}} : if removing user, remove user group afterwards'
   group:
     name: '{{user.name}}'
     state: absent
   become: true
   when:
-  - user.mortal | bool
+  - mortal
   - user.state == 'absent'
   tags: ct-user
 
@@ -74,14 +81,20 @@
     database: passwd
     fail_key: false
     key: '{{user.name}}'
-  register: reg_user_post
+  register: reg_user
   check_mode: false
-  changed_when: reg_user_post.msg is defined and 'could not be found' in reg_user_post.msg
+  changed_when: false
   tags: [ct-user]
 
-- name: '{{user.name}} : report on user status'
+- name: '{{user.name}} : record user status (CM=F)'
+  set_fact:
+    user_exists: '{{reg_user.msg is not defined}}'
+  check_mode: false
+  tags: ct-user
+
+- name: '{{user.name}} : report on user status (CM=F)'
   debug:
-    var: reg_user_post
+    var: reg_user
     verbosity: 1
   check_mode: false
   tags: [ct-user]
@@ -113,8 +126,7 @@
     loop_var: kk
     label: '{{kk.name}}'
   when:
-  - reg_user_post is not changed  # user exists
-  - user.mortal | bool
+  - (not mortal) or (mortal and user.state == 'present')
   become: true
   tags: [ct-user]
 
@@ -129,13 +141,13 @@
     label: '{{user.name}}'
   ignore_errors: '{{ansible_check_mode|bool}}'
   when:
-  - reg_user_post is not changed  # user exists
-  - user.mortal | bool
+  - mortal
+  - user.state == 'present'
   - user.ssh_keys is defined
   become: true
   tags: [ct-user]
 
-- name: '{{user.name}} : copy over base fragment for ssh config'
+- name: '{{user.name}} : copy over base fragment for SSH config'
   copy:
     src: ssh_first.cfg
     dest: '{{ct_user_homedir}}/{{user.name}}/.ssh/cfg.d/000.cfg'
@@ -143,8 +155,8 @@
     group: '{{user.name}}'
     mode: '0600'
   when:
-  - reg_user_post is not changed  # user exists
-  - user.mortal | bool
+  - mortal
+  - user.state == 'present'
   become: true
   tags: ct-user
 
@@ -156,7 +168,7 @@
     owner: '{{user.name}}'
     state: present
   when:
-  - reg_user_post is not changed  # user exists
+  - (not mortal) or (mortal and user.state == 'present')
   become: true
   tags: ct-user
 
@@ -175,7 +187,7 @@
     loop_var: kk
     label: '{{kk.dest}}'
   when:
-  - reg_user_post is not changed  # user exists
+  - (not mortal) or (mortal and user.state == 'present')
   become: true
   tags: ct-user
 
@@ -187,7 +199,7 @@
     group: '{{user.name}}'
     mode: '0444'
   when:
-  - reg_user_post is not changed  # user exists
+  - (not mortal) or (mortal and user.state == 'present')
   become: true
   tags: ct-user
 
@@ -201,8 +213,8 @@
     owner: '{{user.name}}'
     src: '{{ct_user_homedir}}/{{user.name}}/.ssh/cfg.d/'
   when:
-  - reg_user_post is not changed  # user exists
-  - user.mortal | bool
+  - mortal
+  - user.state == 'present'
   become: true
   tags: ct-user
 
@@ -217,7 +229,7 @@
   loop_control:
     loop_var: kk
   when:
-  - reg_user_post is not changed  # user exists
+  - (not mortal) or (mortal and user.state == 'present')
   become: true
   tags: ct-user
 
