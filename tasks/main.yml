@@ -215,6 +215,7 @@
   when:
   - mortal
   - user.state == 'present'
+  - user.assemble_ssh | default(false)
   become: true
   tags: ct-user
 
