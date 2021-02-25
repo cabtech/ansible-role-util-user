@@ -141,7 +141,6 @@
     label: '{{user.name}}'
   ignore_errors: '{{ansible_check_mode|bool}}'
   when:
-  - mortal
   - user.state == 'present'
   - user.ssh_keys is defined
   become: true
