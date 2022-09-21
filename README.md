@@ -21,6 +21,7 @@ Expects a `user` dictionary of the form:
 | backup   | Boolean      | true |
 | comment  | string       | GECOS field in `/etc/passwd` |
 | email    | string       | future use |
+| expert   | Boolean      | if true, can set up most things themselves |
 | groups   | list(string) | groups to append the user to |
 | mortal   | Boolean      | if false, flags a svc acct and skips some tasks |
 | ssh_keys | list({key,state}) | list of keys and their state (asent or present) |

@@ -2,4 +2,18 @@
 ct_user_homedir: /home
 # list of dict with keys(path, mode)
 ct_user_extra_dirs: []
+ct_essential_dirs:
+- {name: .ssh, mode: '0700'}
+ct_standard_dirs:
+- {name: .ssh/cfg.d, mode: '0700'}
+- {name: .ssh/keys, mode: '0700'}
+- {name: .vim, mode: '0755'}
+- {name: .vim/ftplugin, mode: '0755'}
+- {name: bin, mode: '0755'}
+- {name: etc, mode: '0700'}
+- {name: etc/bash.d, mode: '0755'}
+- {name: src, mode: '0755'}
+- {name: tmp, mode: '0755'}
+- {name: var, mode: '0755'}
+- {name: work, mode: '0755'}
 ...
