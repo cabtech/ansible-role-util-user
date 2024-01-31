@@ -36,7 +36,7 @@
   tags: ct-user
 
 - name: "If removing user, remove SSH keys first : {{ user.name }}"
-  ansible.builtin.authorized_key:
+  ansible.posix.authorized_key:
     key: "{{ kk.key }}"
     state: absent
     user: "{{ user.name }}"
@@ -135,7 +135,7 @@
   tags: [ct-user]
 
 - name: "Manage SSH keys : {{ user.name }}"
-  ansible.builtin.authorized_key:
+  ansible.posix.authorized_key:
     key: "{{ kk.key }}"
     state: "{{ kk.state }}"
     user: "{{ user.name }}"
