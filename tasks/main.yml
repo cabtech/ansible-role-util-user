@@ -1,6 +1,23 @@
 ---
 # --------------------------------
 
+- name: "Include variables wrapper"
+  ansible.builtin.include_tasks:
+    file: variables.yml
+  tags: ["ct-user"]
+
+- name: "Disto/Family tasks (FF)"
+  ansible.builtin.include_tasks:
+    file: "{{ lookup('ansible.builtin.first_found', params) }}"
+  vars:
+    params:
+      files:
+      - "{{ ansible_facts['distribution'] }}-{{ ansible_facts['distribution_major_version'].split('.')[0] }}.yml"
+      - "{{ ansible_facts['distribution'] }}.yml"
+      - "{{ ansible_facts['os_family'] }}.yml"
+      - "default.yml"
+  tags: ["ct-user"]
+
 - name: "Get user status (check_mode=false) : {{ user.name }}"
   ansible.builtin.getent:
     database: passwd
@@ -9,21 +26,21 @@
   register: reg_user
   check_mode: false
   changed_when: false
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Record user status and mortality (check_mode=false) : {{ user.name }}"
   ansible.builtin.set_fact:
     user_exists: "{{ reg_user.msg is not defined }}"
     mortal: "{{ user.mortal | bool }}"
   check_mode: false
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Report on user status (check_mode=false)"
   ansible.builtin.debug:
     var: reg_user
     verbosity: 1
   check_mode: false
-  tags: [ct-user]
+  tags: ["ct-user"]
 
 - name: "If adding user, add user group first : {{ user.name }}"
   ansible.builtin.group:
@@ -33,7 +50,7 @@
   when:
   - mortal
   - user.state == "present"
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "If removing user, remove SSH keys first : {{ user.name }}"
   ansible.posix.authorized_key:
@@ -51,7 +68,7 @@
   - user.state == "absent"
   - user.ssh_keys is defined
   become: true
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "User account : {{ user.name }}"
   ansible.builtin.user:
@@ -65,7 +82,7 @@
   when: mortal
   become: true
   ignore_errors: "{{ ansible_check_mode | bool }}"
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "If removing user, remove user group afterwards : {{ user.name }}"
   ansible.builtin.group:
@@ -75,7 +92,7 @@
   when:
   - mortal
   - user.state == "absent"
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Get user status (check_mode=false) : {{ user.name }}"
   ansible.builtin.getent:
@@ -85,20 +102,20 @@
   register: reg_user
   check_mode: false
   changed_when: false
-  tags: [ct-user]
+  tags: ["ct-user"]
 
 - name: "Record user status (check_mode=false) : {{ user.name }}"
   ansible.builtin.set_fact:
     user_exists: "{{ reg_user.msg is not defined }}"
   check_mode: false
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Report on user status (check_mode=false) : {{ user.name }}"
   ansible.builtin.debug:
     var: reg_user
     verbosity: 1
   check_mode: false
-  tags: [ct-user]
+  tags: ["ct-user"]
 
 - name: "Create essential directories : {{ user.name }}"
   ansible.builtin.file:
@@ -115,7 +132,7 @@
   - (not mortal) or (mortal and user.state == "present")
   ignore_errors: "{{ ansible_check_mode | bool }}"
   become: true
-  tags: [ct-user]
+  tags: ["ct-user"]
 
 - name: "Create standard directories : {{ user.name }}"
   ansible.builtin.file:
@@ -132,7 +149,7 @@
   - (not mortal) or (mortal and user.state == "present")
   - not user.expert
   become: true
-  tags: [ct-user]
+  tags: ["ct-user"]
 
 - name: "Manage SSH keys : {{ user.name }}"
   ansible.posix.authorized_key:
@@ -148,7 +165,7 @@
   - (not mortal) or (mortal and user.state == "present")
   - user.ssh_keys is defined
   become: true
-  tags: [ct-user]
+  tags: ["ct-user"]
 
 - name: "Copy over base fragment for SSH config : {{ user.name }}"
   ansible.builtin.copy:
@@ -162,7 +179,7 @@
   - user.state == "present"
   - not user.expert
   become: true
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Add line to .bashrc : {{ user.name }}"
   ansible.builtin.lineinfile:
@@ -175,7 +192,7 @@
   - (not mortal) or (mortal and user.state == "present")
   - not user.expert
   become: true
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Copy misc files over : {{ user.name }}"
   ansible.builtin.copy:
@@ -195,7 +212,7 @@
   - (not mortal) or (mortal and user.state == "present")
   - not user.expert
   become: true
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Sort out prompt string : {{ user.name }}"
   ansible.builtin.template:
@@ -208,7 +225,7 @@
   - (not mortal) or (mortal and user.state == "present")
   - not user.expert
   become: true
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Assemble SSH config fragments : {{ user.name }}"
   ansible.builtin.assemble:
@@ -225,7 +242,7 @@
   - user.assemble_ssh | default(false)
   - not user.expert
   become: true
-  tags: ct-user
+  tags: ["ct-user"]
 
 - name: "Create extra dirs from ct_user_extra_dirs : {{ user.name }}"
   ansible.builtin.file:
@@ -240,7 +257,7 @@
   when:
   - (not mortal) or (mortal and user.state == "present")
   become: true
-  tags: ct-user
+  tags: ["ct-user"]
 
 # --------------------------------
 ...
